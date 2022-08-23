@@ -1,0 +1,20 @@
+= Kafka setup
+
+== Kafka setup - SSL :  Setup with self signed certificate
+
+* Contain script to
+
+- Create your own private Certificate Authority (CA)
+- Create server certificates
+- Create client certificates
+
+* Contains a Steep by Steep guide do the setup
+
+link:ssl/README.adoc[Kafka setup - SSL :  Setup with self signed certificate]
+
+== Kafka setup for jarry.dk
+
+Setup with four brokers all with SSL enabled.
+
+link:jarry_dk/README.adoc[Kafka setup for jarry.dk]
+

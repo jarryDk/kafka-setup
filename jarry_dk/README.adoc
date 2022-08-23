@@ -1,0 +1,114 @@
+= Kafka setup for jarry.dk
+
+== Setup
+
+We start by setting up `KAFKA_HOME`
+
+[source,bash]
+----
+export KAFKA_HOME=/opt/apache/kafka/kafka_2.13-3.2.1
+----
+
+== Create all certificates for jarry.dk
+
+The script will after creating a new Creating CA Authority create the folloing files
+
+- /opt/apache/kafka/jarry_dk/broker100.jarry.dk.keystore.jks
+- /opt/apache/kafka/jarry_dk/broker200.jarry.dk.keystore.jks
+- /opt/apache/kafka/jarry_dk/broker300.jarry.dk.keystore.jks
+- /opt/apache/kafka/jarry_dk/broker400.jarry.dk.keystore.jks
+- /opt/apache/kafka/jarry_dk/kafka.server.truststore.jks
+- /opt/apache/kafka/jarry_dk/kafka.client.truststore.jks
+
+[source,bash]
+----
+./setup_jarry_dk.sh
+----
+
+link:setup_jarry_dk.sh[setup_jarry_dk.sh]
+
+
+NOTE: A new `CA Authority` will be create evry time the script is executed !
+
+== Test certificates
+
+[source,bash]
+----
+keytool -list -v \
+	-keystore /opt/apache/kafka/jarry_dk/broker100.jarry.dk.keystore.jks \
+	-storepass password1234
+----
+
+== Start servers
+
+.broker100.jarry.dk
+[source,bash]
+----
+$KAFKA_HOME/bin/kafka-server-start.sh \
+	server_broker100.properties
+----
+
+link:server_broker100.properties[server_broker100.properties]
+
+.broker200.jarry.dk
+[source,bash]
+----
+$KAFKA_HOME/bin/kafka-server-start.sh \
+	server_broker200.properties
+----
+
+link:server_broker200.properties[server_broker200.properties]
+
+.broker300.jarry.dk
+[source,bash]
+----
+$KAFKA_HOME/bin/kafka-server-start.sh \
+	server_broker300.properties
+----
+
+link:server_broker300.properties[server_broker300.properties]
+
+.broker400.jarry.dk
+[source,bash]
+----
+$KAFKA_HOME/bin/kafka-server-start.sh \
+	server_broker400.properties
+----
+
+link:server_broker400.properties[server_broker400.properties]
+
+== SSL Clienet (self signed)
+
+.client-ssl.properties
+----
+bootstrap.servers=kafka:9093
+security.protocol=SSL
+ssl.truststore.location=/opt/apache/kafka/jarry_dk/kafka.client.truststore.jks
+ssl.truststore.password=test1234
+ssl.keystore.location=/opt/apache/kafka/jarry_dk/broker100.jarry.dk.keystore.jks
+ssl.keystore.password=test1234
+ssl.key.password=test1234
+----
+
+link:client-ssl.properties[client-ssl.properties]
+
+=== Produce using SSL
+
+[source,bash]
+----
+$KAFKA_HOME/bin/kafka-console-producer.sh \
+    --broker-list broker100.jarry.dk:9093 \
+    --topic test \
+    --producer.config client-ssl.properties
+----
+
+=== Produce using SSL
+
+[source,bash]
+----
+$KAFKA_HOME/bin/kafka-console-consumer.sh \
+    --bootstrap-server broker100.jarry.dk:9093 \
+    --topic test \
+    --consumer.config client-ssl.properties \
+    --from-beginning
+----

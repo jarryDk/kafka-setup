@@ -1,0 +1,221 @@
+= Kafka setup - SSL :  Setup with self signed certificate
+
+== Do it via Script
+
+Update `link:config.conf[config.conf]` in this folder to match your default setup.
+
+=== Create own private Certificate Authority (CA)
+
+Will create the files
+
+- ca-cert
+- ca-key
+
+[source,bash]
+----
+./create_ca_authority.sh [-name authority_name] [-v validity]
+----
+
+=== Create server certificates
+
+Will create the files
+
+- <hostname>.keystore.jks
+- kafka.server.truststore.jks
+
+[source,bash]
+----
+./create_server_certificates.sh [-name hostname] [-v validity] [-spass storepassword] [-kpass keypassword]
+----
+
+=== Create client certificates
+
+Will create the file
+
+- kafka.client.truststore.jks
+
+[source,bash]
+----
+./create_client_certificates.sh
+----
+
+== Do it Steep by Steep
+
+=== Setup Kafka broker
+
+.Create own private Certificate Authority (CA)
+[source,bash]
+----
+openssl req -new \
+    -newkey rsa:4096 \
+    -days 3650 \
+    -x509 \
+    -subj /CN=<CA_AUTHORITY_CN> \
+    -keyout ca-key \
+    -out ca-cert \
+    -nodes
+----
+
+.Create Kafka Server Certificate and store in KeyStore
+[source,bash]
+----
+keytool -genkey \
+    -keystore kafka.server.keystore.jks \
+    -validity 365 \
+    -dname CN=<HOSTNAME> \
+    -keyalg RSA \
+    -storetype pkcs12 \
+    -storepass <password> \
+    -keypass <password>
+----
+
+.Create Certificate signed request (CSR)
+[source,bash]
+----
+keytool -keystore kafka.server.keystore.jks \
+    -certreq \
+    -file cert-file \
+    -storepass <password> \
+    -keypass <password>
+----
+
+.Get CSR Signed with the CA
+[source,bash]
+----
+openssl x509 -req \
+    -CA ca-cert \
+    -CAkey ca-key \
+    -in cert-file \
+    -out cert-file-signed \
+    -days 365 \
+    -CAcreateserial \
+    -passin pass:$CA_PASS
+----
+
+.Import CA certificate in KeyStore
+[source,bash]
+----
+keytool -keystore kafka.server.keystore.jks \
+    -alias CARoot \
+    -import \
+    -file ca-cert \
+    -storepass <password> \
+    -keypass <password> \
+    -noprompt
+----
+
+.Import Signed CSR In KeyStore
+[source,bash]
+----
+keytool -keystore kafka.server.keystore.jks \
+    -import \
+    -file cert-file-signed \
+    -storepass <password> \
+    -keypass <password> \
+    -noprompt
+----
+
+.Import CA certificate In TrustStore
+[source,bash]
+----
+keytool -keystore kafka.server.truststore.jks \
+    -alias CARoot \
+    -import \
+    -file ca-cert \
+    -storepass <password> \
+    -keypass <password> \
+    -noprompt
+----
+
+.Change to server.properties
+----
+broker.id=100
+
+listeners=SSL://broker100.jarry.dk:9093
+advertised.listeners=SSL://broker100.jarry.dk:9093
+
+ssl.truststore.location=/opt/apache/kafka/jarry_dk/kafka.server.truststore.jks
+ssl.truststore.password=password1234
+ssl.keystore.location=/opt/apache/kafka/jarry_dk/broker100.jarry.dk.keystore.jks
+ssl.keystore.password=password1234
+
+ssl.client.auth=required
+
+security.inter.broker.protocol=SSL
+# ssl.endpoint.identification.algorithm=
+
+log.dirs=/tmp/kafka-logs-100
+----
+
+=== Setup Kafka client
+
+.Import CA certificate In TrustStore
+[source,bash]
+----
+keytool -keystore kafka.client.truststore.jks \
+    -alias CARoot \
+    -import \
+    -file ca-cert \
+    -storepass <password> \
+    -keypass <password> \
+    -noprompt
+----
+
+==== SSL Clienet (self signed)
+
+.client-ssl.properties
+----
+bootstrap.servers=kafka:9093
+security.protocol=SSL
+ssl.truststore.location=/var/private/ssl/kafka.client.truststore.jks
+ssl.truststore.password=<password>
+ssl.keystore.location=/var/private/ssl/kafka.client.keystore.jks
+ssl.keystore.password=<password>
+----
+
+===== Produce using SSL
+
+[source,bash]
+----
+bin/kafka-console-producer.sh \
+    --broker-list kafka:9093 \
+    --topic test \
+    --producer.config client-ssl.properties
+----
+
+===== Produce using SSL
+
+[source,bash]
+----
+bin/kafka-console-consumer.sh \
+    --bootstrap-server kafka:9093 \
+    --topic test \
+    --consumer.config client-ssl.properties \
+    --from-beginning
+----
+
+== Test certificates
+
+.kafka.server.keystore.jk
+[source,bash]
+----
+keytool -list -v \
+	-keystore kafka.server.keystore.jks \
+	-storepass password1234
+----
+
+.kafka.server.truststore.jks
+[source,bash]
+----
+keytool -list -v \
+	-keystore kafka.server.truststore.jks \
+	-storepass password1234
+----
+
+.kafka.client.truststore.jks
+[source,bash]
+----
+keytool -list -v \
+	-keystore kafka.client.truststore.jks \
+	-storepass password1234
+----
