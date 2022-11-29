@@ -1,0 +1,17 @@
+{
+    "title": "ToDo",
+    "description": "A ToDo in the catalog",
+    "type": "object",
+    "subject": {
+        "description": "Subject of todo",
+        "type": "string"
+    },
+    "body": {
+        "description": "Body of todo",
+        "type": "string"
+    },
+    "uuid": {
+        "description": "Uuid of todo",
+        "type": "string"
+    }
+}
