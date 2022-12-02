@@ -19,6 +19,11 @@ public class UserCollection {
 
     public final static ObjectMapper objectMapper = new ObjectMapper();
 
+    /**
+     * <code>
+     * export KAFKA_USER_PASSWORD_JSON='[{"name":"user1","password":"password1"}]'
+     * </code>
+     */
     @ConfigProperty(name = "KAFKA_USER_PASSWORD_JSON", defaultValue = "[{\"name\":\"user1\",\"password\":\"password1\"}]")
     String kafkaUserPasswordJson;
 

@@ -1,0 +1,45 @@
+= Kafka - Confluence - Podman
+
+== cp-all-in-one-community.yaml
+
+- zookeeper
+    * 2181:2181
+- broker2
+    * 29092:29092
+    * 9092:9092
+- broker3
+    * 29093:29093
+    * 9093:9093
+- schema-registry
+    * 8081:8081
+- connect
+    * 8083:8083
+- control-center
+    * http://localhost:9021/[9021]
+- ksqldb-server
+    * 8088:8088
+- rest-proxy
+    * 8082:8082
+
+.up
+[source,bash]
+----
+podman-compose -f cp-all-in-one-community.yaml up
+----
+
+.down
+[source,bash]
+----
+podman-compose -f cp-all-in-one-community.yaml down
+----
+
+- https://github.com/confluentinc/cp-all-in-one/blob/7.3.0-post/cp-all-in-one-community/docker-compose.yml
+
+- https://github.com/confluentinc/cp-all-in-one/blob/latest/cp-all-in-one/docker-compose.yml
+
+- https://github.com/confluentinc/examples/blob/7.3.0-post/cp-quickstart/start-docker-community.sh
+
+== Links
+
+- https://ksqldb.io/quickstart-platform.html#quickstart-content
+- https://github.com/confluentinc/cp-demo

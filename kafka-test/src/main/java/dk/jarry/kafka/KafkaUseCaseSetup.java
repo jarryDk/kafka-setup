@@ -1,6 +1,8 @@
 package dk.jarry.kafka;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
@@ -26,6 +28,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import dk.jarry.kafka.entity.ToDo;
 import io.apicurio.registry.serde.SerdeConfig;
 
 @Dependent
@@ -38,13 +41,13 @@ public class KafkaUseCaseSetup {
     @ConfigProperty(name = "GROUP_ID", defaultValue = "unit-test")
     String groupId;
 
-    @ConfigProperty(name = "REGISTRY_URL", defaultValue = "http://localhost:8081/apis/registry/v2")
+    @ConfigProperty(name = "REGISTRY_URL", defaultValue = "http://localhost:8081/")
     String registryUrl;
 
-    @ConfigProperty(name = "REGISTRY_TYPE", defaultValue = "Apicurio")
+    @ConfigProperty(name = "REGISTRY_TYPE", defaultValue = "confluentinc-schema-registry") // Apicurio
     String registryType;
 
-    @ConfigProperty(name = "KAFKA_BOOTSTRAP_SERVERS", defaultValue = "localhost:9092")
+    @ConfigProperty(name = "KAFKA_BOOTSTRAP_SERVERS", defaultValue = "localhost:9092,localhost:9093")
     String kafkaBootstrapServers;
 
     @Inject
@@ -55,28 +58,37 @@ public class KafkaUseCaseSetup {
 
     @PostConstruct
     public void init() {
-        try {
-            schema.createSchemas(registryUrl, groupId);
-        } catch (Exception e) {
-            e.printStackTrace();
+        if ("Apicurio".equals(registryType)) {
+            try {
+                schema.createSchemas(registryUrl, groupId);
+            } catch (Exception e) {
+                e.printStackTrace();
+                throw e;
+            }
         }
     }
 
-    public void addToTopicUseCase(UseCase useCase) {
+    public <T> void addToTopic(UseCase useCase, T record) {
         startUseCase(useCase);
         try {
-            addRecordToTopic(useCase);
-        } catch (org.everit.json.schema.ValidationException e) {
-            useCase.getTestCase().ifPresentOrElse(
-                    testCase -> {
-                        JsonNode node = testCase.findValue("org.everit.json.schema.ValidationException");
-                        if (node != null && "true".equals(node.asText())) {
-                            LOGGER.log(Level.INFO, " - " + e.getMessage());
-                        } else {
-                            LOGGER.log(Level.WARNING, " - " + e.getMessage());
-                        }
-                    },
-                    () -> LOGGER.log(Level.WARNING, " - " + e.getMessage()));
+            if (record != null) {
+                addRecordToTopic(useCase, record);
+            } else {
+                addRecordToTopic(useCase);
+            }
+        } catch (Exception e) {
+            Map<String, String> cases = new HashMap<>();
+            useCase.getTestCase().ifPresent(
+                    prop -> prop.fieldNames().forEachRemaining(
+                            key -> cases.put(key, prop.get(key).asText())));
+            String key = e.getClass().getName();
+            if (cases.containsKey(key) &&
+                    cases.get(key).equals(e.getMessage())) {
+                LOGGER.log(Level.INFO, " - " + e.getMessage());
+            } else {
+                LOGGER.log(Level.WARNING, " - " + e.getMessage());
+                throw e;
+            }
         }
         endUseCase(useCase);
     }
@@ -98,12 +110,16 @@ public class KafkaUseCaseSetup {
     }
 
     private void addRecordToTopic(UseCase useCase) {
-        String key = useCase.getKey();
         JsonNode record = useCase.getRecord();
+        addRecordToTopic(useCase, record);
+    }
+
+    public <T> void addRecordToTopic(UseCase useCase, T record) {
         String topic = useCase.getTopic();
+        String key = useCase.getKey();
         LOGGER.log(Level.INFO, String.format(" - Producing record (%s): %s", key, record));
-        try (Producer<String, JsonNode> producer = new KafkaProducer<String, JsonNode>(getProperties(useCase))) {
-            producer.send(new ProducerRecord<String, JsonNode>(topic, key, record), new Callback() {
+        try (Producer<String, T> producer = new KafkaProducer<String, T>(getProperties(useCase))) {
+            producer.send(new ProducerRecord<String, T>(topic, key, record), new Callback() {
                 @Override
                 public void onCompletion(RecordMetadata m, Exception e) {
                     if (e != null) {
@@ -123,6 +139,8 @@ public class KafkaUseCaseSetup {
     private void createTopic(UseCase useCase) {
         String topic = useCase.getTopic();
         Properties props = getProperties(useCase);
+        // final NewTopic newTopic = new NewTopic(topic,
+        // Optional.of(Integer.valueOf("2")), Optional.of(Short.parseShort("2")));
         final NewTopic newTopic = new NewTopic(topic, Optional.empty(), Optional.empty());
         try (final AdminClient adminClient = AdminClient.create(props)) {
             adminClient.createTopics(Collections.singletonList(newTopic)).all().get();
@@ -138,12 +156,15 @@ public class KafkaUseCaseSetup {
      */
     private Properties getProperties(UseCase useCase) {
         Properties props = new Properties();
-        props.putAll(useCase.getKafkaProperties().getMap());
+        props.putAll(useCase.getKafkaProperties());
         // Configure kafka settings
         props.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers);
         props.putIfAbsent(ProducerConfig.CLIENT_ID_CONFIG, "Producer-UnitTest");
         props.putIfAbsent(ProducerConfig.ACKS_CONFIG, "all");
         if ("Apicurio".equals(registryType)) {
+            /**
+             * Apicurio Registry
+             */
             props.putIfAbsent(SerdeConfig.REGISTRY_URL, registryUrl);
             props.putIfAbsent(SerdeConfig.AUTO_REGISTER_ARTIFACT, Boolean.FALSE);
             props.putIfAbsent(SerdeConfig.EXPLICIT_ARTIFACT_GROUP_ID, groupId);
@@ -153,6 +174,9 @@ public class KafkaUseCaseSetup {
             props.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                     io.apicurio.registry.serde.jsonschema.JsonSchemaKafkaSerializer.class.getName());
         } else {
+            /**
+             * Confluence Registry
+             */
             props.putIfAbsent("schema.registry.url", registryUrl);
             props.putIfAbsent("auto.register.schemas", Boolean.FALSE);
             props.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
