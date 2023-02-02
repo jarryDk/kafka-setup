@@ -37,3 +37,7 @@ keytool -noprompt -genkeypair \
   -keypass mypass \
   -keystore myapp.keystore
 ----
+
+== Systemd for kafka
+
+Have a full page -> link:systemd.adoc[Systemd for kafka]

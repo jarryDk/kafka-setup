@@ -1,0 +1,102 @@
+= Kafka as systemd
+
+== Create kafka user
+
+[source,bash]
+----
+sudo adduser kafka
+sudo adduser kafka sudo
+su -l kafka
+----
+
+== Install Kafka
+
+[source,bash]
+----
+VERSION_KAFKA=3.3.2
+VERSION_KAFKA_SCALA=2.13
+KAFKA_FILENAME="kafka_"$VERSION_KAFKA_SCALA"-$VERSION_KAFKA"
+KAFKA_ARCHIVE_NAME="$KAFKA_FILENAME.tgz"
+cd /opt
+curl -O https://downloads.apache.org/kafka/$VERSION_KAFKA/$KAFKA_ARCHIVE_NAME
+tar xvzf $KAFKA_ARCHIVE_NAME
+ln -s $KAFKA_FILENAME/ kafka
+----
+
+
+== Systemd for Kafka Zookeeper
+
+Location of file is  `/usr/lib/systemd/system/kafka-zookeeper.service`
+
+[source,ini]
+----
+[Unit]
+Description=Apache Zookeeper server (Kafka)
+Documentation=http://zookeeper.apache.org
+Requires=network.target remote-fs.target
+After=network.target remote-fs.target
+
+[Service]
+Type=simple
+User=kafka
+Group=kafka
+Environment=JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk
+ExecStart=/opt/kafka/bin/zookeeper-server-start.sh /opt/kafka/config/zookeeper.properties
+ExecStop=/opt/kafka/bin/zookeeper-server-stop.sh
+
+[Install]
+WantedBy=multi-user.target
+----
+
+== Systemd for Kafka 
+
+Location of file is `/usr/lib/systemd/system/kafka.service`
+
+[source,ini]
+----
+[Unit]
+Description=Apache Kafka server (broker)
+Documentation=http://kafka.apache.org/documentation.html
+Requires=network.target remote-fs.target
+After=network.target remote-fs.target kafka-zookeeper.service
+
+[Service]
+Type=simple
+User=kafka
+Group=kafka
+Environment=JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk
+ExecStart=/opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/server.properties
+ExecStop=/opt/kafka/bin/kafka-server-stop.sh
+
+[Install]
+WantedBy=multi-user.target
+----
+
+== Update to Kafka config
+
+Location of file is  `/opt/kafka/config/server.properties` and change the `listeners` property
+
+----
+listeners=PLAINTEXT://0.0.0.0:9092
+----
+
+== Reload and start the systemd services
+
+[source,bash]
+----
+systemctl daemon-reload
+
+systemctl enable kafka-zookeeper.service
+systemctl enable kafka.service
+
+systemctl start kafka-zookeeper.service
+systemctl start kafka.service
+
+systemctl status kafka-zookeeper.service
+systemctl status kafka.service
+----
+
+== Links
+
+- https://gist.github.com/vipmax/9ceeaa02932ba276fa810c923dbcbd4f[kafka install systemd.md ]
+- https://gist.github.com/dyoung522/6f7aab567f70f67030ae4ee0191933c0#file-kafka-oracle-vm-config-md[kafka-oracle-vm-config.md]
